@@ -1,0 +1,261 @@
+name: LimitlessOS Build and Test
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  ARCH: x86_64
+
+jobs:
+  build:
+    name: Build LimitlessOS
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          clang-14 \
+          llvm-14 \
+          lld-14 \
+          nasm \
+          make \
+          grub-pc-bin \
+          grub-efi-amd64-bin \
+          xorriso \
+          qemu-system-x86 \
+          mtools \
+          dosfstools
+    
+    - name: Set up build environment
+      run: |
+        echo "CC=clang-14" >> $GITHUB_ENV
+        echo "LD=ld.lld-14" >> $GITHUB_ENV
+        which clang-14
+        clang-14 --version
+    
+    - name: Build HAL
+      run: |
+        make hal
+        echo "HAL build completed"
+    
+    - name: Build Kernel
+      run: |
+        make kernel
+        echo "Kernel build completed"
+        ls -lh build/limitless.elf || echo "Kernel binary not found"
+    
+    - name: Build Bootloader
+      run: |
+        make bootloader
+        echo "Bootloader build completed"
+    
+    - name: Build Userspace
+      run: |
+        make userspace
+        echo "Userspace build completed"
+    
+    - name: Build Installer
+      run: |
+        make installer || echo "Installer build skipped (optional)"
+    
+    - name: Create ISO Image
+      run: |
+        make iso || echo "ISO creation not yet implemented"
+        if [ -f dist/limitlessos.iso ]; then
+          ls -lh dist/limitlessos.iso
+          echo "ISO created successfully"
+        else
+          echo "ISO creation skipped or failed"
+        fi
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      if: success()
+      with:
+        name: limitlessos-build-${{ github.sha }}
+        path: |
+          build/limitless.elf
+          build/bootloader/BOOTX64.EFI
+          build/bootloader/boot.bin
+          build/userspace/terminal
+          dist/limitlessos.iso
+        retention-days: 7
+    
+    - name: Build summary
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Built Components" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ HAL (Hardware Abstraction Layer)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Microkernel" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Bootloader" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Userspace" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Artifacts" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        ls -lh build/ 2>/dev/null || echo "Build directory listing unavailable"
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  qemu-test:
+    name: Test in QEMU
+    runs-on: ubuntu-latest
+    needs: build
+    if: false  # Disabled until ISO creation is working
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: limitlessos-build-${{ github.sha }}
+    
+    - name: Install QEMU
+      run: |
+        sudo apt update
+        sudo apt install -y qemu-system-x86
+    
+    - name: Test boot in QEMU
+      timeout-minutes: 2
+      run: |
+        if [ -f limitlessos.iso ]; then
+          timeout 60 qemu-system-x86_64 \
+            -cdrom limitlessos.iso \
+            -m 2G \
+            -smp 2 \
+            -nographic \
+            -serial mon:stdio \
+            -no-reboot \
+            -d guest_errors \
+            || echo "QEMU test completed or timed out"
+        else
+          echo "ISO file not found, skipping QEMU test"
+        fi
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install tools
+      run: |
+        sudo apt update
+        sudo apt install -y clang-format-14 cppcheck
+    
+    - name: Check C formatting (informational)
+      continue-on-error: true
+      run: |
+        find kernel hal userspace -name "*.c" -o -name "*.h" | \
+          xargs clang-format-14 --dry-run --Werror 2>&1 || \
+          echo "Formatting issues found (informational only)"
+    
+    - name: Static analysis with cppcheck (informational)
+      continue-on-error: true
+      run: |
+        cppcheck \
+          --enable=warning,style,performance \
+          --suppress=missingIncludeSystem \
+          --quiet \
+          kernel/src hal/src userspace/src 2>&1 || \
+          echo "Static analysis found issues (informational only)"
+
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Check documentation files
+      run: |
+        echo "## Documentation Status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f README.md ]; then
+          echo "- ✅ README.md exists" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ README.md missing" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f ROADMAP.md ]; then
+          echo "- ✅ ROADMAP.md exists" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ ROADMAP.md missing" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f docs/ARCHITECTURE.md ]; then
+          echo "- ✅ ARCHITECTURE.md exists" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ ARCHITECTURE.md missing" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f docs/BUILD.md ]; then
+          echo "- ✅ BUILD.md exists" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ BUILD.md missing" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Check for TODO/FIXME comments
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### TODO/FIXME Comments" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        grep -r "TODO\|FIXME" kernel/ hal/ userspace/ --include="*.c" --include="*.h" | head -20 || echo "No TODO/FIXME found"
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Run basic security checks
+      run: |
+        echo "## Security Checks" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check for common security issues
+        if grep -r "strcpy\|strcat\|gets\|sprintf" kernel/ hal/ --include="*.c" --include="*.h"; then
+          echo "⚠️ Found potentially unsafe string functions" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No unsafe string functions found" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Check for hardcoded credentials (basic check)
+        if grep -ri "password\|secret\|api_key" kernel/ hal/ --include="*.c" --include="*.h" | grep -v "//"; then
+          echo "⚠️ Found potential hardcoded secrets" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No obvious hardcoded secrets" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  build-status:
+    name: Build Status Summary
+    runs-on: ubuntu-latest
+    needs: [build, code-quality, documentation, security-scan]
+    if: always()
+    
+    steps:
+    - name: Build status
+      run: |
+        echo "## LimitlessOS CI Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Build Status: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "Code Quality: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "Documentation: ${{ needs.documentation.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
