@@ -1,0 +1,153 @@
+# Example Cargo.toml for Rust-based LimitlessOS components
+# This is a template showing how to integrate Rust into the build
+# Rename to Cargo.toml to enable Rust compilation
+
+[package]
+name = "limitlessos"
+version = "0.1.0"
+edition = "2021"
+authors = ["LimitlessOS Contributors"]
+
+[workspace]
+members = [
+    "kernel-rust",
+    "drivers/usb-rust",
+    "drivers/gpu-rust",
+    "userspace/ai-rust"
+]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+panic = "abort"
+
+# ============================================================================
+# Kernel Rust Module (optional)
+# ============================================================================
+
+[package]
+name = "limitlessos-kernel"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+path = "kernel-rust/src/lib.rs"
+
+[dependencies]
+# No standard library for kernel
+# Only core + alloc
+
+[features]
+default = []
+ai-hooks = []
+
+# Example kernel module structure:
+# kernel-rust/
+#   src/
+#     lib.rs          - Kernel Rust entry point
+#     ai_hooks.rs     - AI hooks in Rust
+#     scheduler.rs    - Scheduler in Rust
+#     memory.rs       - Memory management in Rust
+
+# ============================================================================
+# USB Driver in Rust
+# ============================================================================
+
+[package]
+name = "limitlessos-usb"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "drivers/usb-rust/src/lib.rs"
+
+[dependencies]
+# USB stack dependencies
+
+# ============================================================================
+# GPU Driver in Rust
+# ============================================================================
+
+[package]
+name = "limitlessos-gpu"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "drivers/gpu-rust/src/lib.rs"
+
+[dependencies]
+# GPU driver dependencies
+
+# ============================================================================
+# AI Service in Rust
+# ============================================================================
+
+[package]
+name = "limitlessos-ai"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# AI/ML dependencies
+# tract = { version = "0.21", default-features = false }  # ML inference
+# tokenizers = "0.14"  # For LLM tokenization
+
+[[bin]]
+name = "ai-service"
+path = "userspace/ai-rust/src/main.rs"
+
+# ============================================================================
+# Build Configuration
+# ============================================================================
+
+[target.x86_64-limitlessos]
+# Custom target for LimitlessOS
+# See: kernel-rust/x86_64-limitlessos.json
+
+[build]
+target = "x86_64-limitlessos"
+
+# ============================================================================
+# Notes
+# ============================================================================
+
+# To use Rust in LimitlessOS:
+#
+# 1. Rename this file to Cargo.toml
+#
+# 2. Create custom target JSON:
+#    kernel-rust/x86_64-limitlessos.json
+#
+# 3. Install Rust nightly:
+#    rustup install nightly
+#    rustup component add rust-src --toolchain nightly
+#
+# 4. Build:
+#    cargo +nightly build --release --target x86_64-limitlessos
+#
+# 5. Link Rust staticlib with C kernel:
+#    Update Makefile to link target/x86_64-limitlessos/release/liblimitlessos_kernel.a
+#
+# Advantages of Rust:
+# - Memory safety without garbage collection
+# - Zero-cost abstractions
+# - Fearless concurrency
+# - Modern type system
+# - Excellent tooling (Cargo, rustfmt, clippy)
+#
+# Disadvantages:
+# - Larger binary size vs C
+# - Longer compile times
+# - Learning curve
+# - Less mature embedded ecosystem
+#
+# Recommendation: Use Rust for new components, C for performance-critical paths
