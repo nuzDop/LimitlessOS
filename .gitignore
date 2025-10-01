@@ -1,0 +1,46 @@
+# Build outputs
+build/
+dist/
+*.o
+*.a
+*.so
+*.elf
+*.bin
+*.img
+*.iso
+
+# Kernel binaries
+kernel/limitless.elf
+bootloader/*.efi
+bootloader/*.bin
+
+# Debug files
+*.log
+*.map
+*.sym
+*.debug
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependency directories
+vendor/
+third_party/
+
+# Test artifacts
+test/output/
+*.test
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Config overrides
+config.local.mk
+.env.local
