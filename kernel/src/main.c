@@ -27,26 +27,6 @@ extern void console_init(void);
 extern void console_write(const char* str);
 extern void console_putchar(char c);
 
-/* Simple string functions */
-static UNUSED size_t strlen(const char* str) {
-    size_t len = 0;
-    while (str[len]) len++;
-    return len;
-}
-
-static UNUSED void* memset(void* dest, int c, size_t n) {
-    uint8_t* d = dest;
-    while (n--) *d++ = (uint8_t)c;
-    return dest;
-}
-
-static UNUSED void* memcpy(void* dest, const void* src, size_t n) {
-    uint8_t* d = dest;
-    const uint8_t* s = src;
-    while (n--) *d++ = *s++;
-    return dest;
-}
-
 /* Boot information structure (from bootloader) */
 typedef struct boot_info {
     uint32_t magic;

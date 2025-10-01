@@ -6,7 +6,6 @@
 #include "kernel.h"
 #include "perf.h"
 #include "microkernel.h"
-#include "string.h"
 
 /* Global performance state */
 static struct {
